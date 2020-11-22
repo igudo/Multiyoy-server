@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Multiyoy/players"
 	"fmt"
 	"net"
 	"os"
@@ -10,31 +11,11 @@ import (
 const (
 	host       = "localhost"
 	port       = "7456"
-	numClients = 2
+	numPlayers = 2
 )
 
 // Global list of clients
-var allClients [numClients]*Client
-
-// Client is a player class
-type Client struct {
-	connection net.Conn // TCP
-}
-
-// Handles
-func (c *Client) handleConnection() {
-	buf := make([]byte, 2048)
-
-	c.connection.Write([]byte("Write message: "))
-	_, err := c.connection.Read(buf)
-	if err != nil {
-		fmt.Println("Error reading:", err.Error())
-	}
-	fmt.Println(string(buf))
-	c.connection.Write([]byte("Message received."))
-	c.connection.Close()
-	fmt.Println("Disconnected", c.connection.RemoteAddr().String())
-}
+var allPlayers [numPlayers]*players.Player
 
 var gameStatus = "initializing"
 
@@ -53,17 +34,17 @@ func main() {
 
 	// Wait for every client to connect
 	gameStatus = "waiting"
-	for i := 0; i < numClients; i++ {
+	for i := 0; i < numPlayers; i++ {
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting: ", err.Error())
 			os.Exit(1)
 		}
-		allClients[i] = &Client{connection: conn}
+		allPlayers[i] = &players.Player{Connection: conn}
 		fmt.Println("Connected", conn.RemoteAddr().String())
 
 		// Handle connection in a new goroutine
-		go allClients[i].handleConnection()
+		go allPlayers[i].HandleConnection()
 	}
 
 	for {
