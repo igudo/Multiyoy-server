@@ -12,7 +12,9 @@ import (
 type Player struct {
 	Connection       net.Conn                // TCP
 	GameData         *map[string]interface{} // Vars of game
+	GameMap          *[][]int                // Hex grid
 	NeedSendGameData bool                    // Flag to send game data to the player
+	NeedSendGameMap  bool                    // Flag to send game map to the player
 	Online           bool                    // Is online
 	Trusted          bool                    // Protection against connections from outside the client application
 }
@@ -22,6 +24,7 @@ func (p *Player) HandleConnection() {
 	defer p.Close()
 	for p.Online {
 		p.CheckOnline()
+
 		if p.NeedSendGameData {
 			p.SendGameData()
 			s, err := p.ReadBytes(2048)
@@ -32,6 +35,18 @@ func (p *Player) HandleConnection() {
 			}
 			p.NeedSendGameData = false
 		}
+
+		if p.NeedSendGameMap {
+			p.SendGameMap()
+			s, err := p.ReadBytes(2048)
+			if !err {
+				if !p.CheckAnswer(&s) {
+					p.Online = false
+				}
+			}
+			p.NeedSendGameMap = false
+		}
+
 	}
 }
 
@@ -62,6 +77,14 @@ func (p *Player) Write(s string) {
 // SendGameData sends gamedata in json
 func (p *Player) SendGameData() {
 	bytes, _ := json.Marshal(*p.GameData)
+	p.Connection.Write(bytes)
+}
+
+// SendGameMap sends hex grid in json
+func (p *Player) SendGameMap() {
+	bytes, _ := json.Marshal(map[string]interface{}{
+		"map": *p.GameMap,
+	})
 	p.Connection.Write(bytes)
 }
 

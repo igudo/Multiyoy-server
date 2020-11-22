@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Multiyoy/maps"
 	"Multiyoy/players"
 	"fmt"
 	"net"
@@ -25,6 +26,7 @@ var GameData = map[string]interface{}{
 var allPlayers [8]*players.Player
 var numPlayersNow = 0
 var gameStatus = "waiting"
+var gameMap *[][]int
 
 func playersSync() {
 	needSendGameData := 0
@@ -70,10 +72,21 @@ func playersSync() {
 			p.NeedSendGameData = true
 		}
 	}
+	for gameMap == nil {
+		time.Sleep(1 * time.Second)
+	}
+
+	// Send generated game map to every player
+	for _, p := range allPlayers {
+		if p != nil {
+			p.GameMap = gameMap
+			p.NeedSendGameMap = true
+		}
+	}
 }
 
 func main() {
-	numPlayers := 3 // Todo: get this from args
+	numPlayers := 2 // Todo: get this from args
 
 	// Listen for incoming connections
 	l, err := net.Listen("tcp", host+":"+port)
@@ -105,6 +118,7 @@ func main() {
 						Connection:       conn,
 						GameData:         &GameData,
 						NeedSendGameData: false,
+						NeedSendGameMap:  false,
 						Online:           true,
 						Trusted:          false,
 					}
@@ -126,12 +140,21 @@ func main() {
 					}
 				}
 			}
+			// TODO: Here we need a delay
 		}
 	}
 
 	// Here we starting
 	gameStatus = "starting"
-	time.Sleep(5 * time.Second)
-	fmt.Println("WE ARE STARTING!!!!")
-	time.Sleep(3 * time.Second)
+	gameMap = maps.GenMap(9)
+
+	gameStatus = "started"
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting: ", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println("Connected", conn.RemoteAddr().String())
+	}
 }
