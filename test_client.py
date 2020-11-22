@@ -9,10 +9,10 @@ while True:
     if from_server != b'':
         print(from_server)
         client.send(b"{\"success\": true}")
-        tmpi = 0
-    else:
-        tmpi += 1
-        if tmpi > 20:
-            client.send(b"Something tells me you're closed. Is it true?")
+        # tmpi = 0
+    # else:
+    #     tmpi += 1
+    #     if tmpi > 20:
+    #         client.send(b"Something tells me you're closed. Is it true?")
 
 client.close()

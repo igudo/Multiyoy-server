@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 )
 
 // Const values. Todo: get this from arguments
@@ -23,17 +24,18 @@ var GameData = map[string]interface{}{
 // Players game data synchronization with the server's game data
 var allPlayers [8]*players.Player
 var numPlayersNow = 0
+var gameStatus = "waiting"
 
 func playersSync() {
-	numPlayersTemp := numPlayersNow
 	needSendGameData := 0
 	somebodyDisconnected := false
-	for GameData["status"] == "waiting" {
+
+	// While status == waiting lets check connections and disconnections
+	for GameData["status"] == gameStatus {
 		// Check if new connection
-		if numPlayersNow > numPlayersTemp {
+		if numPlayersNow > GameData["num_players_now"].(int) {
 			fmt.Println("New connection! Sync...")
 			GameData["num_players_now"] = numPlayersNow
-			numPlayersTemp = numPlayersNow
 			needSendGameData++
 		}
 
@@ -43,7 +45,6 @@ func playersSync() {
 				if !p.Online {
 					fmt.Println("Somebody disconnected! Sync...")
 					numPlayersNow--
-					numPlayersTemp--
 					GameData["num_players_now"] = numPlayersNow
 					allPlayers[i] = nil
 					somebodyDisconnected = true
@@ -62,18 +63,17 @@ func playersSync() {
 		}
 	}
 
-	// If there are starting status let's send this to players
+	GameData["status"] = gameStatus
+	// There are starting status so let's send this to players
 	for _, p := range allPlayers {
 		if p != nil {
-			if needSendGameData > 0 && !p.NeedSendGameData {
-				p.NeedSendGameData = true
-			}
+			p.NeedSendGameData = true
 		}
 	}
 }
 
 func main() {
-	numPlayers := 5 // Todo: get this from args
+	numPlayers := 3 // Todo: get this from args
 
 	// Listen for incoming connections
 	l, err := net.Listen("tcp", host+":"+port)
@@ -90,37 +90,48 @@ func main() {
 	go playersSync()
 
 	// Wait for every client to connect
-	for ; numPlayersNow < numPlayers; numPlayersNow++ {
-		conn, err := l.Accept()
-		if err != nil {
-			fmt.Println("Error accepting: ", err.Error())
-			os.Exit(1)
+	for numPlayersNow < numPlayers {
+		for ; numPlayersNow < numPlayers; numPlayersNow++ {
+			conn, err := l.Accept()
+			if err != nil {
+				fmt.Println("Error accepting: ", err.Error())
+				os.Exit(1)
+			}
+
+			// Set new player to a free position
+			for i, p := range allPlayers {
+				if p == nil {
+					allPlayers[i] = &players.Player{
+						Connection:       conn,
+						GameData:         &GameData,
+						NeedSendGameData: false,
+						Online:           true,
+						Trusted:          false,
+					}
+					// Handle connection in a new goroutine
+					go allPlayers[i].HandleConnection()
+					break
+				}
+			}
+			fmt.Println("Connected", conn.RemoteAddr().String())
 		}
 
-		// Set new player to a free position
-		for i, p := range allPlayers {
-			if p == nil {
-				allPlayers[i] = &players.Player{
-					Connection:       conn,
-					GameData:         &GameData,
-					NeedSendGameData: false,
-					Online:           true,
+		// Wait until everyone is trusted
+		if numPlayersNow == numPlayers {
+			fmt.Println("Everybody connected! Waiting while trusted")
+			for i, p := range allPlayers {
+				for {
+					if allPlayers[i] == nil || p.Trusted || numPlayersNow != numPlayers {
+						break
+					}
 				}
-				// Handle connection in a new goroutine
-				go allPlayers[i].HandleConnection()
-				break
 			}
 		}
-		fmt.Println("Connected", conn.RemoteAddr().String())
 	}
 
-	GameData["status"] = "starting"
-	for i, p := range allPlayers {
-		if p != nil {
-			fmt.Println(i, "is online")
-		}
-	}
+	// Here we starting
+	gameStatus = "starting"
+	time.Sleep(5 * time.Second)
 	fmt.Println("WE ARE STARTING!!!!")
-	for {
-	}
+	time.Sleep(3 * time.Second)
 }
